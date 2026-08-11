@@ -1,0 +1,801 @@
+---
+title: "NPVegData Analysis 2025"
+output:
+  html_document: default
+  pdf_document: default
+date: "2025-10-30"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+`````{r load packages, message=FALSE, warning=FALSE}
+library(tidyverse)
+library(janitor)
+library(readr)
+library(readxl)
+library(gt)
+library(purrr)
+`````
+
+## Housekeeping
+
+### Load Data
+
+```{r}
+#This year's data
+alldata_now <- read_csv("2025-ALL.csv")
+
+#Past data
+alldata_23 <- read_csv("2023-ALL.csv")
+alldata_22 <- read_csv("2022-ALL.csv")
+alldata_21 <- read_csv("2021-ALL.csv")
+
+```
+
+## Clean data
+
+```{r data clean}
+alldata_now <- alldata_now %>%
+clean_names() %>% #Standardize cover_type to title case and remove extra spaces
+mutate(cover_type = str_to_title(str_trim(cover_type)))
+
+
+alldata_23 <- alldata_23 %>%
+  clean_names() %>%
+  mutate(cover_type = str_to_title(str_trim(cover_type)))
+
+alldata_22 <- alldata_22 %>%
+  clean_names() %>%
+  mutate(cover_type = str_to_title(str_trim(cover_type)))
+
+alldata_21 <- alldata_21 %>%
+  clean_names() %>%
+  mutate(cover_type = str_to_title(str_trim(cover_type)))
+
+```
+
+# Current Year - Core Metrics
+
+## Percent Cover
+
+```{r}
+##Gross Cover
+
+# Calculate cover for each category
+native_cover <- alldata_now %>%
+  filter(cover_type == "Native") %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+exotic_cover <- alldata_now %>%
+  filter(cover_type == "Exotic") %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+# Calculate cover for specific subcategories based on species column
+thatch_cover <- alldata_now %>%
+  filter(species == "thatch") %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+mowed_thatch_cover <- alldata_now %>%
+  filter(species == "mowed_thatch") %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+bare_ground_cover <- alldata_now %>%
+  filter(species == "bare_ground") %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+# Calculate remaining "Other" (cover_type = "Other" but not the three specific species)
+remaining_other_cover <- alldata_now %>%
+  filter(cover_type == "Other" & !species %in% c("Thatch", "Mowed_thatch", "Bare_ground")) %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+# Total cover
+total_cover <- alldata_now %>%
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+# Calculate percentages
+percent_native <- (native_cover / total_cover) * 100
+percent_exotic <- (exotic_cover / total_cover) * 100
+percent_thatch <- (thatch_cover / total_cover) * 100
+percent_mowed_thatch <- (mowed_thatch_cover / total_cover) * 100
+percent_bare_ground <- (bare_ground_cover / total_cover) * 100
+percent_remaining_other <- (remaining_other_cover / total_cover) * 100
+
+
+## Relative Cover
+
+# Total vegetative cover (exclude 'Other')
+total_veg_cover <- alldata_now %>%
+  filter(cover_type != "Other") %>%   # only actual vegetation
+  summarize(total = sum(cover, na.rm = TRUE)) %>%
+  pull(total)
+
+# Relative percentages
+percent_relative_native <- (native_cover / total_veg_cover) * 100
+percent_relative_exotic <- (exotic_cover / total_veg_cover) * 100
+
+
+## Results
+
+# Create a tibble with all categories
+total_cover_pct <- tibble(
+  Cover_Type = c("Native", "Exotic", "Other", "Other", "Other", "Other"),
+  Subcategory = c("Native", "Exotic", "Thatch", "Mowed Thatch", "Bare Ground", "Other"),
+  Percent_Cover = c(percent_native, percent_exotic, percent_thatch, 
+                    percent_mowed_thatch, percent_bare_ground, percent_remaining_other)
+)
+
+# Plot it
+ggplot(total_cover_pct, aes(x = Cover_Type, y = Percent_Cover, fill = Subcategory)) +
+  geom_col() +
+  labs(
+    title = "Percent Vegetation Cover by Type",
+    y = "Percent Cover (%)",
+    x = "",
+    fill = "Cover Category"
+  ) +
+  theme_minimal() +
+    geom_text(aes(label = round(Percent_Cover, 1)),
+            position = position_stack(vjust = 0.5),
+            size = 3.2,
+            color = "white") +
+  theme(
+    legend.position = "right",
+    legend.text = element_text(size = 10),
+    legend.title = element_text(size = 11, face = "bold")
+  ) +
+  scale_fill_manual(
+    values = c("Native" = "forestgreen", 
+               "Exotic" = "firebrick", 
+               "Thatch" = "tan",
+               "Mowed Thatch" = "tan4",
+               "Bare Ground" = "saddlebrown",
+               "Other" = "gray"),
+    breaks = c("Native", "Exotic", "Thatch", "Mowed Thatch", "Bare Ground", "Other"),
+    labels = c("Native", "Exotic", "  Thatch", "  Mowed Thatch", "  Bare Ground", "  Other")
+  ) +
+  guides(fill = guide_legend(
+    title = "Cover Category",
+    override.aes = list(size = 5)
+  ))
+
+#Create tibble for relative percent cover
+
+relative_cover_pct <- tibble(
+Cover_Type = c("Native", "Exotic"),
+Percent_Cover = c(percent_relative_native, percent_relative_exotic)
+)
+
+#Plot relative percent cover
+
+ggplot(relative_cover_pct, aes(x = Cover_Type, y = Percent_Cover, fill = Cover_Type)) +
+  geom_col() +
+  geom_text(
+    aes(
+      y = Percent_Cover / 2,               # place label halfway up the bar
+      label = round(Percent_Cover, 1)
+    ),
+    color = "white",
+    size = 3.2
+  ) +
+  labs(
+    title = "Relative Vegetation Cover (% of Total Vegetative Cover)",
+    y = "Percent Cover (%)",
+    x = ""
+  ) +
+  theme_minimal() +
+  scale_fill_manual(values = c("Native" = "forestgreen", "Exotic" = "firebrick"))
+
+
+```
+
+## Percent Cover By Transect
+
+```{r}
+# Get all unique transects
+
+transects <- unique(alldata_now$transect)
+
+# Initialize empty tibble for results
+
+all_transect_summary <- tibble()
+
+# Loop through each transect
+
+for (VP in transects) {
+
+# Filter data for this transect
+
+VP_data <- alldata_now %>%
+filter(transect == VP)
+
+# Total cover
+
+total_cover_VP <- sum(VP_data$cover, na.rm = TRUE)
+
+# Native cover
+
+native_cover_VP <- VP_data %>%
+filter(cover_type == "Native") %>%
+summarize(total = sum(cover, na.rm = TRUE)) %>%
+pull(total)
+
+# Exotic cover
+
+exotic_cover_VP <- VP_data %>%
+filter(cover_type == "Exotic") %>%
+summarize(total = sum(cover, na.rm = TRUE)) %>%
+pull(total)
+
+# Other cover
+
+other_cover_VP <- total_cover_VP - (native_cover_VP + exotic_cover_VP)
+
+# Percent covers
+
+percent_native_VP <- (native_cover_VP / total_cover_VP) * 100
+percent_exotic_VP <- (exotic_cover_VP / total_cover_VP) * 100
+percent_other_VP <- (other_cover_VP / total_cover_VP) * 100
+
+# Relative cover (exclude Other)
+
+total_veg_cover_VP <- native_cover_VP + exotic_cover_VP
+percent_relative_native_VP <- (native_cover_VP / total_veg_cover_VP) * 100
+percent_relative_exotic_VP <- (exotic_cover_VP / total_veg_cover_VP) * 100
+
+# Store results
+
+VP_summary <- tibble(
+Transect = VP,
+Percent_Native = percent_native_VP,
+Percent_Exotic = percent_exotic_VP,
+Percent_Other = percent_other_VP,
+Relative_Native = percent_relative_native_VP,
+Relative_Exotic = percent_relative_exotic_VP
+)
+
+# Append
+
+all_transect_summary <- bind_rows(all_transect_summary, VP_summary)
+}
+
+##Graph it 
+
+# Reshape for plotting
+
+all_transect_long <- all_transect_summary %>%
+pivot_longer(
+cols = c(Percent_Native, Percent_Exotic, Percent_Other),
+names_to = "Cover_Type",
+values_to = "Percent_Cover"
+) %>%
+mutate(Cover_Type = case_when(
+Cover_Type == "Percent_Native" ~ "Native",
+Cover_Type == "Percent_Exotic" ~ "Exotic",
+Cover_Type == "Percent_Other" ~ "Other"
+))
+
+# Set stacking order
+
+all_transect_long$Cover_Type <- factor(all_transect_long$Cover_Type, levels = c("Other", "Exotic", "Native"))
+
+# Plot stacked bars
+
+ggplot(all_transect_long, aes(x = Transect, y = Percent_Cover, fill = Cover_Type)) +
+geom_col() +
+labs(
+title = "Stacked Percent Cover by Transect",
+y = "Percent Cover (%)",
+x = "Transect"
+) +
+scale_fill_manual(values = c("Native" = "forestgreen", "Exotic" = "firebrick", "Other" = "gray")) +
+theme_minimal() +
+theme(axis.text.x = element_text(angle = 45, hjust = 1))+
+  geom_text(aes(label = round(Percent_Cover, 1)),  # round to 1 decimal
+            position = position_stack(vjust = 0.5), # place labels in the middle of each bar
+            color = "white", size = 4)
+
+
+# Relative cover (Native and Exotic only)
+
+relative_cover_long <- all_transect_summary %>%
+select(Transect, Relative_Native, Relative_Exotic) %>%
+pivot_longer(
+cols = c(Relative_Native, Relative_Exotic),
+names_to = "Cover_Type",
+values_to = "Percent_Cover"
+) %>%
+mutate(Cover_Type = case_when(
+Cover_Type == "Relative_Native" ~ "Native",
+Cover_Type == "Relative_Exotic" ~ "Exotic"
+))
+
+# Set order
+
+relative_cover_long$Cover_Type <- factor(relative_cover_long$Cover_Type, levels = c("Exotic", "Native"))
+
+# Plot
+
+ggplot(relative_cover_long, aes(x = Transect, y = Percent_Cover, fill = Cover_Type)) +
+  geom_col() +
+  geom_text(aes(label = round(Percent_Cover, 1)),  # round to 1 decimal
+            position = position_stack(vjust = 0.5), # place labels in the middle of each bar
+            color = "white", size = 4) +
+  labs(
+    title = "Relative Vegetation Cover (% of Total Vegetative Cover)",
+    y = "Percent Cover (%)",
+    x = "Transect"
+  ) +
+  scale_fill_manual(values = c("Native" = "forestgreen", "Exotic" = "firebrick")) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+## Problem weeds
+
+```{r}
+# Top 10 most abundant exotic species by total cover and percent of exotic cover
+
+total_exotic_cover <- sum(alldata_now$cover[alldata_now$cover_type == "Exotic"], na.rm = TRUE)
+
+top_exotic_species <- alldata_now %>%
+filter(cover_type == "Exotic") %>%
+group_by(species) %>%
+summarize(Total_Cover = sum(cover, na.rm = TRUE)) %>%
+mutate(Percent_of_Exotic = (Total_Cover / total_exotic_cover) * 100) %>%
+arrange(desc(Total_Cover)) %>%
+slice_head(n = 10)
+
+##Listed
+top_exotic_species
+
+##Graphed
+
+ggplot(top_exotic_species, 
+       aes(x = reorder(species, Percent_of_Exotic),
+           y = Percent_of_Exotic)) +
+  geom_col(fill = "firebrick3") +
+  coord_flip() +
+  labs(
+    title = "Top 10 Exotic Species by Percent of Exotic Cover",
+    x = "Species",
+    y = "Percent of Exotic Cover (%)"
+  ) +
+  theme_minimal(base_size = 12) +
+  theme(
+    axis.text.y = element_text(size = 9),
+    plot.title = element_text(face = "bold")
+  )
+
+
+
+
+```
+
+# Past Data - Core metrics
+
+## Percent Cover
+
+```{r}
+
+# ---- MASTER DATA LIST[ADD NEW YEAR HERE] ----
+all_data_list <- list(
+  `2021` = alldata_21,
+  `2022` = alldata_22,
+  `2023` = alldata_23,
+  `2025` = alldata_now    # replace with alldata_26 next year etc.
+)
+
+# ------ AUTOMATED CALCULATIONS AND GRAPHING BELOW  ---------
+
+calc_cover_stats <- function(df) {
+  
+  total_cover  <- sum(df$cover, na.rm = TRUE)
+  native_cover <- sum(df$cover[df$cover_type == "Native"], na.rm = TRUE)
+  exotic_cover <- sum(df$cover[df$cover_type == "Exotic"], na.rm = TRUE)
+  other_cover  <- total_cover - (native_cover + exotic_cover)
+
+  # Percentages of total
+  percent_native <- 100 * native_cover / total_cover
+  percent_exotic <- 100 * exotic_cover / total_cover
+  percent_other  <- 100 * other_cover  / total_cover
+
+  # Relative percentages (no "other")
+  veg_total <- native_cover + exotic_cover
+  percent_relative_native <- 100 * native_cover / veg_total
+  percent_relative_exotic <- 100 * exotic_cover / veg_total
+  
+  tibble(
+    Percent_Native = percent_native,
+    Percent_Exotic = percent_exotic,
+    Percent_Other  = percent_other,
+    Relative_Native = percent_relative_native,
+    Relative_Exotic = percent_relative_exotic
+  )
+}
+
+
+# Automatically run for all years 
+all_years_summary <- imap_dfr(
+  all_data_list,
+  ~ calc_cover_stats(.x) %>% mutate(year = as.integer(.y))
+)
+
+# Create singular combined data set 
+alldata_all <- bind_rows(
+  imap(all_data_list, ~ mutate(.x, year = as.integer(.y)))
+)
+
+#Results
+
+# Results Table
+all_years_summary
+
+#Results Graphs
+
+# Combine all your datasets (2021–2025)
+alldata_all <- bind_rows(alldata_21, alldata_22, alldata_23, alldata_now) %>%
+  filter(!is.na(year))
+
+
+# Summarize total cover per cover type per year
+cover_summary <- alldata_all %>%
+  group_by(year, cover_type) %>%
+  summarize(total_cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+  group_by(year) %>%
+  mutate(percent_cover = (total_cover / sum(total_cover)) * 100)
+
+# Order cover types for consistent stacking
+cover_summary$cover_type <- factor(
+  cover_summary$cover_type,
+  levels = c("Native", "Exotic", "Other")
+)
+
+# Plot 1: Total Percent Cover-----
+ggplot(cover_summary, aes(x = factor(year), y = percent_cover, fill = cover_type)) +
+  geom_bar(stat = "identity") +
+    geom_text(aes(label = round(percent_cover, 1)),
+            position = position_stack(vjust = 0.5),
+            size = 3.2,
+            color = "white") +
+  labs(
+    title = "Total Percent Cover by Year (2021–2025)",
+    x = "Year",
+    y = "Percent Cover",
+    fill = "Cover Type"
+  ) +
+  theme_minimal(base_size = 13) +
+  scale_fill_manual(values = c("forestgreen", "firebrick", "gray70"))
+
+# Plot 2: Relative Percent Cover (Native vs Exotic only) ----
+relative_summary <- cover_summary %>%
+  filter(cover_type %in% c("Native", "Exotic")) %>%
+  group_by(year) %>%
+  mutate(percent_relative = (total_cover / sum(total_cover)) * 100)
+
+ggplot(relative_summary, aes(x = factor(year), y = percent_relative, fill = cover_type)) +
+  geom_bar(stat = "identity") +
+    geom_text(aes(label = round(percent_relative, 1)),
+            position = position_stack(vjust = 0.5),
+            size = 3.2,
+            color = "white") +
+  labs(
+    title = "Percent of Vegetation Cover by Year (2021–2025, Native vs Exotic)",
+    x = "Year",
+    y = "Percent Cover (Relative to Vegetation Only)",
+    fill = "Cover Type"
+  ) +
+  theme_minimal(base_size = 13) +
+  scale_fill_manual(values = c("forestgreen", "firebrick"))
+
+
+
+```
+
+## Species Richness
+
+```{r}
+# 2025 species counts
+species_counts_25 <- alldata_now %>%
+  filter(!species %in% c("Thatch", "Mowed_thatch", "Bare_ground")) %>%
+  group_by(cover_type) %>%
+  summarize(n_species = n_distinct(species)) %>%
+  mutate(year = 2025)
+
+# 2023 species counts
+species_counts_23 <- alldata_23 %>%
+  filter(!species %in% c("Thatch", "Mowed_thatch", "Bare_ground")) %>%
+  group_by(cover_type) %>%
+  summarize(n_species = n_distinct(species)) %>%
+  mutate(year = 2023)
+
+# 2022 species counts
+species_counts_22 <- alldata_22 %>%
+  filter(!species %in% c("Thatch", "Mowed_thatch", "Bare_ground")) %>%
+  group_by (cover_type) %>%
+  summarize(n_species = n_distinct(species)) %>%
+  mutate(year = 2022)
+
+# 2021 species counts
+species_counts_21 <- alldata_21 %>%
+  filter(!species %in% c("Thatch", "Mowed_thatch", "Bare_ground")) %>%
+  group_by(cover_type) %>%
+  summarize(n_species = n_distinct(species)) %>%
+  mutate(year = 2021)
+
+# Combine all years into one tibble
+all_species_counts <- bind_rows(
+  species_counts_21, species_counts_22, 
+  species_counts_23, species_counts_25
+)
+
+# ---- Plot: Stacked Species Counts (Native + Exotic Only) ----
+
+species_counts_no_other <- all_species_counts %>%
+  filter(cover_type %in% c("Native", "Exotic"))
+
+ggplot(species_counts_no_other, 
+       aes(x = factor(year), y = n_species, fill = cover_type)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = n_species),
+            position = position_stack(vjust = 0.5),
+            size = 3.4,
+            color = "white") +
+  labs(
+    title = "Number of Species by Cover Type (2021–2025, excluding Other)",
+    x = "Year",
+    y = "Species Count",
+    fill = "Cover Type"
+  ) +
+  theme_minimal(base_size = 13) +
+  scale_fill_manual(values = c("forestgreen", "firebrick"))
+
+```
+
+## Problem Species over time
+
+```{r}
+
+calc_top5_exotics <- function(df) {
+  df_ex <- df %>% filter(cover_type == "Exotic")
+  total_ex <- sum(df_ex$cover, na.rm = TRUE)
+  
+  df_ex %>%
+    group_by(species) %>%
+    summarize(total_cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+    arrange(desc(total_cover)) %>%
+    slice_head(n = 5) %>%
+    mutate(percent_of_exotic = 100 * total_cover / total_ex)
+}
+
+top5_trends <- imap_dfr(all_data_list, ~ {
+  calc_top5_exotics(.x) %>% mutate(year = as.integer(.y))
+})
+
+# Plot----------------------
+ggplot(top5_trends, aes(x = year, y = percent_of_exotic, color = species, group = species)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(
+    title = "Top 5 Exotic Species Each Year: Percent of Total Exotic Cover",
+    x = "Year",
+    y = "Percent of Exotic Cover (%)",
+    color = "Species"
+  ) +
+  theme_minimal(base_size = 13) +
+  scale_x_continuous(breaks = c(2021, 2022, 2023, 2025)) +
+  scale_color_brewer(palette = "Set1") +
+  ylim(0, max(top5_trends$percent_of_exotic) * 1.1)
+```
+
+# Playground and Deep Dive
+
+## Lost and gained native species over time
+
+```{r}
+# Get native species from 2022
+native_2022 <- alldata_22 %>%
+  filter(cover_type == "Native") %>%
+  distinct(species) %>%
+  pull(species)
+
+# Get native species from 2025
+native_2025 <- alldata_now %>%
+  filter(cover_type == "Native") %>%
+  distinct(species) %>%
+  pull(species)
+
+# Find species in 2022 but not in 2025
+species_lost <- setdiff(native_2022, native_2025)
+
+species_lost
+
+# Species in 2025 but not in 2022
+species_gained <- setdiff(native_2025, native_2022)
+
+species_gained
+```
+
+## Problem Transects Over Time
+
+### Up1, Wet 4, Bio: Native vs Exotic Composition
+
+```{r}
+
+# Filter for the two transects of interest
+focus_transects <- alldata_all %>%
+  filter(transect %in% c("Up1", "Bio", "Wet4"))
+
+# Summarize percent cover by year × transect × cover type
+upbio_summary <- focus_transects %>%
+  group_by(year, transect, cover_type) %>%
+  summarize(total_cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+  group_by(year, transect) %>%
+  mutate(percent_cover = (total_cover / sum(total_cover)) * 100)
+
+# Only keep Native + Exotic for relative cover
+upbio_relative <- upbio_summary %>%
+  filter(cover_type %in% c("Native", "Exotic")) %>%
+  group_by(year, transect) %>%
+  mutate(percent_relative = (total_cover / sum(total_cover)) * 100)
+
+### ---- Plot 1: Percent Cover Over Time (Up1, Wet4, Bio) ----
+ggplot(upbio_summary, aes(x = year, y = percent_cover,
+                          fill = cover_type)) +
+  geom_col(position = "stack") +
+  facet_wrap(~ transect) +
+  labs(
+    title = "Total Percent Cover Over Time (Up1 & Bio)",
+    y = "Percent Cover",
+    x = "Year",
+    fill = "Cover Type"
+  ) +
+  theme_minimal(base_size = 13) +
+  scale_fill_manual(values = c(Native = "forestgreen",
+                               Exotic = "firebrick",
+                               Other = "gray70"))
+
+### ---- Plot 2: Relative Cover (Native vs Exotic Only) ----
+ggplot(upbio_relative,
+       aes(x = year, y = percent_relative, fill = cover_type)) +
+  geom_col(position = "stack") +
+  facet_wrap(~ transect) +
+  labs(
+    title = "Relative Vegetation Cover (Native vs Exotic Only)",
+    y = "Percent of Vegetative Cover",
+    x = "Year",
+    fill = "Cover Type",
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+  axis.text.x = element_text(size = 8)   # or whatever size you want
+) +
+  scale_fill_manual(values = c(Native = "forestgreen",
+                               Exotic = "firebrick"))
+```
+
+### Problem Transects Cont. : Native Cover Loss over time
+
+```{r}
+
+# Wet4 native cover: 2022 vs 2025
+wet4_native_22 <- alldata_22 %>%
+  filter(transect == "Wet4", cover_type == "Native") %>%
+  group_by(species) %>%
+  summarize(total_cover_2022 = sum(cover, na.rm = TRUE), .groups = "drop")
+
+wet4_native_25 <- alldata_now %>%
+  filter(transect == "Wet4", cover_type == "Native") %>%
+  group_by(species) %>%
+  summarize(total_cover_2025 = sum(cover, na.rm = TRUE), .groups = "drop")
+
+wet4_native_change <- full_join(wet4_native_22, wet4_native_25, by = "species") %>%
+  replace_na(list(total_cover_2022 = 0, total_cover_2025 = 0)) %>%
+  mutate(
+    cover_change = total_cover_2025 - total_cover_2022,
+    percent_change = ifelse(total_cover_2022 == 0, NA,
+                            (cover_change / total_cover_2022) * 100)
+  ) %>%
+  arrange(cover_change) %>%  # largest negative first
+  slice_head(n = 5)
+
+
+# Up1 native cover: 2022 vs 2023
+up1_native_22 <- alldata_22 %>%
+  filter(transect == "Up1", cover_type == "Native") %>%
+  group_by(species) %>%
+  summarize(total_cover_2022 = sum(cover, na.rm = TRUE), .groups = "drop")
+
+up1_native_23 <- alldata_23 %>%
+  filter(transect == "Up1", cover_type == "Native") %>%
+  group_by(species) %>%
+  summarize(total_cover_2023 = sum(cover, na.rm = TRUE), .groups = "drop")
+
+# Combine and calculate change
+up1_native_change_22_23 <- full_join(up1_native_22, up1_native_23, by = "species") %>%
+  replace_na(list(total_cover_2022 = 0, total_cover_2023 = 0)) %>%
+  mutate(
+    cover_change = total_cover_2023 - total_cover_2022,   # negative = drop
+    percent_change = ifelse(total_cover_2022 == 0, NA,
+                            (cover_change / total_cover_2022) * 100)
+  ) %>%
+  arrange(cover_change) %>%  # most negative = biggest drop
+  slice_head(n = 5)          # top 5 losses
+
+# Create single table with all loss for 2023 and 2025 --------------------
+
+# Step 1: Sum cover per species per year (Up1 only)
+# -------------------------
+up1_cover <- bind_rows(
+  alldata_22 %>%
+    filter(transect == "Up1", cover_type == "Native") %>%
+    group_by(species) %>%
+    summarize(cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+    mutate(year = 2022),
+
+  alldata_23 %>%
+    filter(transect == "Up1", cover_type == "Native") %>%
+    group_by(species) %>%
+    summarize(cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+    mutate(year = 2023),
+
+  alldata_now %>%
+    filter(transect == "Up1", cover_type == "Native") %>%
+    group_by(species) %>%
+    summarize(cover = sum(cover, na.rm = TRUE), .groups = "drop") %>%
+    mutate(year = 2025)
+)
+
+# -------------------------
+# Step 2: Pivot wider so each year is a column
+# -------------------------
+up1_cover_wide <- up1_cover %>%
+  pivot_wider(
+    names_from = year,
+    values_from = cover,
+    names_prefix = "cover_",
+    values_fill = 0
+  ) %>%
+  # Step 3: Calculate losses relative to 2022
+  mutate(
+    loss_2023 = cover_2023 - cover_2022,
+    loss_2025 = cover_2025 - cover_2022
+  ) %>%
+  # Step 4: Keep only species with loss >= 50
+  filter(loss_2023 <= -50 | loss_2025 <= -50) %>%
+  # Step 5: Sort by largest 2025 loss
+  arrange(loss_2025)
+
+# -------------------------
+# Step 6: Display table with highlighted loss columns
+# -------------------------
+up1_cover_wide %>%
+  gt() %>%
+  cols_label(
+    species = "Species",
+    cover_2022 = "2022 Cover",
+    cover_2023 = "2023 Cover",
+    cover_2025 = "2025 Cover",
+    loss_2023 = "2023 Loss",
+    loss_2025 = "2025 Loss"
+  ) %>%
+  fmt_number(
+    columns = vars(cover_2022, cover_2023, cover_2025, loss_2023, loss_2025),
+    decimals = 1
+  ) %>%
+  gt::tab_style(
+    style = gt::cell_fill(color = "pink"),
+    locations = gt::cells_body(columns = vars(loss_2023, loss_2025))
+  )
+
+```
