@@ -2,7 +2,7 @@
 
 This repository is used for data analysis of quadrat monitoring data of North Parcel (https://ccber.ucsb.edu/restoration-area-north-parcel).
 
-The monitoring data used in this analysist has already been filtered through and cleaned in the veg-monitoring repository (https://github.com/ccber-restoration/veg-monitoring) [by Francis]. 
+The monitoring data used in this analysis has already been filtered through and cleaned [by Francis] in the veg-monitoring repository (https://github.com/ccber-restoration/veg-monitoring). 
 
 
 ## Data
